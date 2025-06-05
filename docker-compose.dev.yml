@@ -1,0 +1,13 @@
+services:
+  backend:
+    environment:
+      APP_MODE: "dev" 
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+
+  frontend:
+    volumes:
+      - ./frontend:/app 
+      - /app/node_modules 
+    command: ["npm", "run", "dev"]
