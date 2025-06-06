@@ -2,63 +2,116 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.clientRoutes = clientRoutes;
 const zod_1 = require("zod");
-const server_1 = require("../server"); // Importe o prisma do server.ts
-const clientSchema = zod_1.z.object({
-    name: zod_1.z.string().min(3, 'Name must be at least 3 characters long'),
-    email: zod_1.z.string().email('Invalid email address'),
+const createClientSchema = zod_1.z.object({
+    name: zod_1.z.string().min(3, 'Nome deve ter no mínimo 3 caracteres.'),
+    email: zod_1.z.string().email('Email inválido.'),
     status: zod_1.z.enum(['ACTIVE', 'INACTIVE']).default('ACTIVE'),
 });
-async function clientRoutes(app) {
-    // List all clients
-    app.get('/', async (request, reply) => {
-        const clients = await server_1.prisma.client.findMany();
-        return reply.send(clients);
-    });
-    // Create a new client
-    app.post('/', async (request, reply) => {
+const updateClientSchema = zod_1.z.object({
+    name: zod_1.z.string().min(3, 'Nome deve ter no mínimo 3 caracteres.').optional(),
+    email: zod_1.z.string().email('Email inválido.').optional(),
+    status: zod_1.z.enum(['ACTIVE', 'INACTIVE']).optional(),
+}).partial();
+async function clientRoutes(fastify) {
+    // GET /clients
+    fastify.get('/clients', async (request, reply) => {
         try {
-            const { name, email, status } = clientSchema.parse(request.body);
-            const client = await server_1.prisma.client.create({
-                data: { name, email, status },
+            const { search } = request.query;
+            const clients = await fastify.prisma.client.findMany({
+                where: search
+                    ? {
+                        OR: [
+                            { name: { contains: search } },
+                        ],
+                    }
+                    : {},
+                orderBy: { name: 'asc' },
+            });
+            return reply.send(clients);
+        }
+        catch (error) {
+            console.error('Erro ao listar clientes (detalhes):', error);
+            fastify.log.error('Erro ao listar clientes:', error);
+            return reply.status(500).send({ message: 'Erro interno do servidor.' });
+        }
+    });
+    // GET /clients/:id
+    fastify.get('/clients/:id', async (request, reply) => {
+        const { id } = request.params;
+        try {
+            const client = await fastify.prisma.client.findUnique({
+                where: { id },
+            });
+            if (!client) {
+                return reply.status(404).send({ message: 'Cliente não encontrado.' });
+            }
+            return reply.send(client);
+        }
+        catch (error) {
+            fastify.log.error('Erro ao buscar cliente.', error);
+            return reply.status(500).send({ message: 'Erro interno do servidor.' });
+        }
+    });
+    // POST /clients
+    fastify.post('/clients', async (request, reply) => {
+        try {
+            const { name, email, status } = createClientSchema.parse(request.body);
+            const client = await fastify.prisma.client.create({
+                data: { name, email, status: status || 'ACTIVE' },
             });
             return reply.status(201).send(client);
         }
         catch (error) {
             if (error instanceof zod_1.z.ZodError) {
-                return reply.status(400).send({ message: error.errors });
+                return reply.status(400).send({ message: 'Erro de validação', errors: error.errors });
             }
-            return reply.status(500).send({ message: 'Internal server error', error });
+            if (error.code === 'P2002' && error.meta?.target?.includes('email')) {
+                return reply.status(409).send({ message: 'Email já cadastrado.' });
+            }
+            fastify.log.error('Erro ao criar cliente:', error);
+            return reply.status(500).send({ message: 'Erro interno do servidor.', error });
         }
     });
-    // Update a client
-    app.put('/:id', async (request, reply) => {
+    // PUT /clients/:id
+    fastify.put('/clients/:id', async (request, reply) => {
         const { id } = request.params;
         try {
-            const { name, email, status } = clientSchema.partial().parse(request.body); // Allow partial updates
-            const client = await server_1.prisma.client.update({
+            const updateData = updateClientSchema.parse(request.body);
+            const client = await fastify.prisma.client.update({
                 where: { id },
-                data: { name, email, status },
+                data: updateData,
             });
             return reply.send(client);
         }
         catch (error) {
             if (error instanceof zod_1.z.ZodError) {
-                return reply.status(400).send({ message: error.errors });
+                return reply.status(400).send({ message: 'Erro de validação', errors: error.errors });
             }
-            return reply.status(500).send({ message: 'Internal server error', error });
+            if (error.code === 'P2025') {
+                return reply.status(404).send({ message: 'Cliente não encontrado para atualização.' });
+            }
+            if (error.code === 'P2002' && error.meta?.target?.includes('email')) {
+                return reply.status(409).send({ message: 'Email já cadastrado para outro cliente.' });
+            }
+            fastify.log.error(`Erro ao atualizar cliente ${id}:`, error);
+            return reply.status(500).send({ message: 'Erro interno do servidor.' });
         }
     });
-    // Delete a client (optional, but good for completeness)
-    app.delete('/:id', async (request, reply) => {
+    // DELETE /clients/:id
+    fastify.delete('/clients/:id', async (request, reply) => {
         const { id } = request.params;
         try {
-            await server_1.prisma.client.delete({
+            await fastify.prisma.client.delete({
                 where: { id },
             });
-            return reply.status(204).send(); // No content
+            return reply.status(204).send();
         }
         catch (error) {
-            return reply.status(500).send({ message: 'Internal server error', error });
+            if (error.code === 'P2025') {
+                return reply.status(404).send({ message: 'Cliente não encontrado para exclusão.' });
+            }
+            fastify.log.error(`Erro ao deletar cliente ${id}:`, error);
+            return reply.status(500).send({ message: 'Erro interno do servidor.' });
         }
     });
 }

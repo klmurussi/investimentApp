@@ -8,21 +8,19 @@ generator client {
 }
 
 model Client {
-  id     String @id @default(uuid())
+  id          String @id @default(uuid())
   name        String
   email       String @unique
   status      Status @default(ACTIVE)
-  allocations Allocation[]
+  assets      Asset[]
 }
 
-model Allocation {
+model Asset {
   id String @id @default(uuid())
-  assetName String
-  quantity  Float
+  name      String
+  value     Float
   clientID  String
   client    Client    @relation(fields: [clientID], references: [id])
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt 
 }
 
 enum Status {

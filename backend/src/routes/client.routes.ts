@@ -1,69 +1,136 @@
-// backend/src/routes/client.routes.ts
-import { FastifyInstance } from 'fastify';
+import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
-import { prisma } from '../server'; // Importe o prisma do server.ts
+import { PrismaClient } from '@prisma/client';
 
-const clientSchema = z.object({
-  name: z.string().min(3, 'Name must be at least 3 characters long'),
-  email: z.string().email('Invalid email address'), // Usa a validação padrão de email do Zod
+declare module 'fastify' {
+  interface FastifyInstance {
+    prisma: PrismaClient;
+  }
+}
+
+const createClientSchema = z.object({
+  name: z.string().min(3, 'Nome deve ter no mínimo 3 caracteres.'),
+  email: z.string().email('Email inválido.'), 
   status: z.enum(['ACTIVE', 'INACTIVE']).default('ACTIVE'),
 });
 
-// Não é necessário exportar ClientInput, mas pode ser útil
-// type ClientInput = z.infer<typeof clientSchema>;
+const createAssetBodySchema = z.object({
+  name: z.string().min(3, 'Nome do ativo deve ter no mínimo 3 caracteres.'),
+  value: z.number().positive('Quantidade deve ser um número positivo.'),
+});
 
-export async function clientRoutes(app: FastifyInstance) {
-  // List all clients
-  app.get('/', async (request, reply) => {
-    const clients = await prisma.client.findMany();
-    return reply.send(clients);
-  });
-
-  // Create a new client
-  app.post('/', async (request, reply) => {
+export async function clientRoutes(fastify: FastifyInstance) {
+  // GET /clients
+  fastify.get('/clients', async (request:FastifyRequest, reply:FastifyReply) => {
     try {
-      const { name, email, status } = clientSchema.parse(request.body);
-      const client = await prisma.client.create({
-        data: { name, email, status },
+      const { search } = request.query as { search?: string };
+      const clients = await fastify.prisma.client.findMany({
+        where: search
+          ? {
+              OR: [
+                { name: { contains: search} },
+              ],
+            }
+          : {},
+        orderBy: { name: 'asc' },
+      });
+      return reply.send(clients);
+    } catch (error) {
+      console.error('Erro ao listar clientes (detalhes):', error);
+      fastify.log.error('Erro ao listar clientes:', error);
+      return reply.status(500).send({ message: 'Erro interno do servidor.' });
+    }
+  })
+
+  // POST /clients
+  fastify.post('/clients', async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const { name, email, status } = createClientSchema.parse(request.body);
+      const client = await fastify.prisma.client.create({
+        data: { name, email, status: status || 'ACTIVE' },
       });
       return reply.status(201).send(client);
-    } catch (error) {
+    } catch (error:any) {
       if (error instanceof z.ZodError) {
-        return reply.status(400).send({ message: error.errors });
+        return reply.status(400).send({ message: 'Erro de validação', errors: error.errors });
       }
-      return reply.status(500).send({ message: 'Internal server error', error });
+      if (error.code === 'P2002' && error.meta?.target?.includes('email')) {
+        return reply.status(409).send({ message: 'Email já cadastrado.' });
+      }
+      fastify.log.error('Erro ao criar cliente:', error);
+      return reply.status(500).send({ message: 'Erro interno do servidor.', error });
     }
   });
 
-  // Update a client
-  app.put('/:id', async (request, reply) => {
-    const { id } = request.params as { id: string };
+  // POST /clients/:id/assets 
+  fastify.post('/clients/:id/assets', async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      const { name, email, status } = clientSchema.partial().parse(request.body); // Permite atualizações parciais
-      const client = await prisma.client.update({
-        where: { id },
-        data: { name, email, status },
+      const { id: clientID } = request.params as { id: string };
+      const { name, value } = createAssetBodySchema.parse(request.body);
+
+      const clientExists = await fastify.prisma.client.findUnique({
+        where: { id: clientID },
+        select: { id: true },
       });
-      return reply.send(client);
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return reply.status(400).send({ message: error.errors });
+
+      if (!clientExists) {
+        return reply.status(404).send({ message: 'Cliente não encontrado para adicionar o ativo.' });
       }
-      return reply.status(500).send({ message: 'Internal server error', error });
+
+      const newAsset = await fastify.prisma.asset.create({
+        data: { name, value, clientID,
+          include: {
+            client: {
+              select: { name: true },
+            },
+          } ,
+        }
+      });
+
+      return reply.status(201).send(newAsset);
+    } catch (error: any) {
+      if (error instanceof z.ZodError) {
+        return reply.status(400).send({ message: 'Erro de validação', errors: error.errors });
+      }
+      fastify.log.error(`Erro ao criar ativo para o cliente:`, error);
+      return reply.status(500).send({ message: 'Erro interno do servidor.' });
     }
   });
 
-  // Delete a client
-  app.delete('/:id', async (request, reply) => {
-    const { id } = request.params as { id: string };
+  // GET /clients/:id/assets 
+  fastify.get('/clients/:id/assets', async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      await prisma.client.delete({
-        where: { id },
+      const { id: clientID } = request.params as { id: string };
+
+      const clientExists = await fastify.prisma.client.findUnique({
+        where: { id: clientID },
+        select: { id: true },
       });
-      return reply.status(204).send(); // No content
-    } catch (error) {
-      // Handle cases where client not found, etc.
-      return reply.status(500).send({ message: 'Internal server error', error });
+      if (!clientExists) {
+        return reply.status(404).send({ message: 'Cliente não encontrado para listar os ativos.' });
+      }
+
+      const assets = await fastify.prisma.asset.findMany({
+        where: { clientID: clientID },
+        include: {
+          client: { 
+            select: { name: true },
+          },
+        },
+        orderBy: { name: 'asc' }, 
+      });
+
+      const simplifiedAssets = assets.map(alloc => ({
+        name: alloc.name,
+        value: alloc.value,
+        clientName: alloc.client ? alloc.client.name : 'Cliente Desconhecido',
+        id: alloc.id,
+      }));
+
+      return reply.send(simplifiedAssets);
+    } catch (error: any) {
+      fastify.log.error(`Erro ao listar ativos do cliente`, error);
+      return reply.status(500).send({ message: 'Erro interno do servidor.' });
     }
   });
 }

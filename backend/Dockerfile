@@ -14,7 +14,6 @@ RUN chmod +x wait-and-start.sh
 
 COPY . .
 
-RUN npx prisma generate
-RUN npm run build
+CMD ["./wait-and-start.sh"]
 
-EXPOSE 3000
+EXPOSE 5000
