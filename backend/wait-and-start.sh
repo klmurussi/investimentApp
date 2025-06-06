@@ -17,5 +17,5 @@ if [ "$APP_MODE" = "dev" ]; then
   exec npm run dev
 else
   echo "🚀 Iniciando o servidor..."
-  npm run build && npm start 
+  npm run start 
 fi

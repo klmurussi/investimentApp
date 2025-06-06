@@ -1,14 +1,16 @@
+// backend/src/routes/client.routes.ts
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { prisma } from '../server'; // Importe o prisma do server.ts
 
 const clientSchema = z.object({
   name: z.string().min(3, 'Name must be at least 3 characters long'),
-  email: z.string().email('Invalid email address'),
+  email: z.string().email('Invalid email address'), // Usa a validação padrão de email do Zod
   status: z.enum(['ACTIVE', 'INACTIVE']).default('ACTIVE'),
 });
 
-type ClientInput = z.infer<typeof clientSchema>;
+// Não é necessário exportar ClientInput, mas pode ser útil
+// type ClientInput = z.infer<typeof clientSchema>;
 
 export async function clientRoutes(app: FastifyInstance) {
   // List all clients
@@ -37,7 +39,7 @@ export async function clientRoutes(app: FastifyInstance) {
   app.put('/:id', async (request, reply) => {
     const { id } = request.params as { id: string };
     try {
-      const { name, email, status } = clientSchema.partial().parse(request.body); // Allow partial updates
+      const { name, email, status } = clientSchema.partial().parse(request.body); // Permite atualizações parciais
       const client = await prisma.client.update({
         where: { id },
         data: { name, email, status },
@@ -51,7 +53,7 @@ export async function clientRoutes(app: FastifyInstance) {
     }
   });
 
-  // Delete a client (optional, but good for completeness)
+  // Delete a client
   app.delete('/:id', async (request, reply) => {
     const { id } = request.params as { id: string };
     try {
@@ -60,6 +62,7 @@ export async function clientRoutes(app: FastifyInstance) {
       });
       return reply.status(204).send(); // No content
     } catch (error) {
+      // Handle cases where client not found, etc.
       return reply.status(500).send({ message: 'Internal server error', error });
     }
   });

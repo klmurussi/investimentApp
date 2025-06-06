@@ -1,45 +1,31 @@
+// app/assets/page.tsx
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
-import axios from 'axios';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-
-interface Asset {
-  name: string;
-  value: number;
-}
+import { useState } from 'react';
+import AssetsDashboard from '@/components/AssetsDashboard';
+import ManagementLayoutBase from '@/components/DefaultMain';
 
 export default function AssetsPage() {
-  const { data: assets, isLoading, error } = useQuery<Asset[]>({
-    queryKey: ['assets'],
-    queryFn: async () => {
-      const response = await axios.get('http://localhost:3000/assets'); // Use a URL do backend
-      return response.data;
-    },
-  });
+  const [searchTerm, setSearchTerm] = useState('');
 
-  if (isLoading) return <div>Carregando ativos...</div>;
-  if (error) return <div>Erro ao carregar ativos: {error.message}</div>;
+  const handleSearchChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchTerm(event.target.value);
+  };
+
+  const handleNewAssetClick = () => {
+    alert('Funcionalidade de "Cadastrar Novo Ativo" será implementada aqui!');
+  };
 
   return (
-    <div className="container mx-auto p-4">
-      <h1 className="text-2xl font-bold mb-4">Ativos Financeiros Disponíveis</h1>
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Nome do Ativo</TableHead>
-            <TableHead className="text-right">Valor Atual</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {assets?.map((asset) => (
-            <TableRow key={asset.name}>
-              <TableCell>{asset.name}</TableCell>
-              <TableCell className="text-right">{asset.value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </div>
+    <ManagementLayoutBase
+      title="Gerenciamento de Ativos"
+      searchTerm={searchTerm}
+      onSearchChange={handleSearchChange}
+      searchPlaceholder="Pesquisar por nome do cliente..."
+      addLabel="+ Cadastrar Novo Ativo"
+      onAddClick={handleNewAssetClick}
+    >
+      <AssetsDashboard searchTerm={searchTerm} />
+    </ManagementLayoutBase>
   );
 }

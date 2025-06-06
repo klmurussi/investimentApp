@@ -1,3 +1,4 @@
+// backend/src/server.ts
 import Fastify from 'fastify';
 import { clientRoutes } from './routes/client.routes';
 import { PrismaClient } from '@prisma/client';
@@ -9,7 +10,6 @@ async function main() {
   try {
     app.register(clientRoutes, { prefix: '/clients' });
 
-    // Rota para ativos fixos
     app.get('/assets', async (request, reply) => {
       return reply.send([
         { name: 'Ação XYZ', value: 150.75 },
@@ -25,7 +25,10 @@ async function main() {
     app.log.error(err);
     process.exit(1);
   } finally {
-    await prisma.$disconnect();
+    // Isso pode causar o erro 'PrismaClient is already disconnected' em dev,
+    // mas é bom para um desligamento limpo em produção.
+    // Em dev, o servidor é reiniciado pelo ts-node, então o disconnect é chamado repetidamente.
+    // await prisma.$disconnect();
   }
 }
 
