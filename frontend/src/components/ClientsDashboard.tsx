@@ -1,7 +1,15 @@
 'use client'; 
 
 import { useState, useEffect } from 'react';
-import { mockClients, Client } from '@/mocks/clients';
+import { useRouter } from 'next/navigation';
+
+interface Client {
+  id: string;
+  name: string;
+  email: string;
+  status: 'ACTIVE' | 'INACTIVE'; 
+}
+
 
 interface ClientsDashboardProps {
   searchTerm: string;
@@ -12,23 +20,33 @@ export default function ClientsDashboard({ searchTerm }: ClientsDashboardProps) 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const router = useRouter();
+
   useEffect(() => {
     const fetchClients = async () => {
       try {
         setLoading(true);
-        await new Promise(resolve => setTimeout(resolve, 1000)); 
-
-        let filteredClients = mockClients;
+        setError(null);
+        
+        const API_URL = 'http://localhost:5000'; 
+        let url = `${API_URL}/clients`;
 
         if (searchTerm) {
-          filteredClients = mockClients.filter(client =>
-            client.name.toLowerCase().includes(searchTerm.toLowerCase())
-          );
+          url += `?search=${encodeURIComponent(searchTerm)}`;
         }
 
-        setClients(filteredClients);
+        const response = await fetch(url);
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.message || 'Falha ao buscar clientes.');
+        }
+
+        const data: Client[] = await response.json();
+        setClients(data);
+
       } catch (err) {
-        setError('Erro ao carregar os clientes.');
+        console.error("Erro ao carregar clientes do backend:", err);
         console.error(err);
       } finally {
         setLoading(false);
@@ -37,6 +55,10 @@ export default function ClientsDashboard({ searchTerm }: ClientsDashboardProps) 
 
     fetchClients();
   }, [searchTerm]);
+
+  const handleClientClick = (clientId: string) => {
+    router.push(`/clients/${clientId}`);
+  };
 
   if (loading) {
     return (
@@ -63,10 +85,12 @@ export default function ClientsDashboard({ searchTerm }: ClientsDashboardProps) 
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {clients.map(client => (
-            <div key={client.id} className="bg-white p-6 rounded-lg shadow-md border border-gray-200">
+            <div key={client.id} 
+            onClick={() => handleClientClick(client.id)}
+            className="bg-white p-6 rounded-lg shadow-md border border-gray-200">
               <h2 className="text-2xl font-semibold text-blue-700 mb-2">{client.name}</h2>
               <p className="text-gray-700 mb-1"><strong>Email:</strong> {client.email}</p>
-              <p className="text-gray-700"><strong>Status:</strong> {client.status === 'active' ? 'Ativo' : 'Inativo'}</p>
+              <p className="text-gray-700"><strong>Status:</strong> {client.status === 'ACTIVE' ? 'Ativo' : 'Inativo'}</p>
             </div>
           ))}
         </div>

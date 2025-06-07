@@ -7,8 +7,8 @@ exports.prisma = void 0;
 const fastify_1 = __importDefault(require("fastify"));
 const cors_1 = __importDefault(require("@fastify/cors"));
 const client_routes_1 = require("./routes/client.routes");
+const assets_routes_1 = require("./routes/assets.routes");
 const client_1 = require("@prisma/client");
-const asset_routes_1 = require("./routes/asset.routes");
 exports.prisma = new client_1.PrismaClient();
 const fastify = (0, fastify_1.default)({
     logger: true,
@@ -31,7 +31,7 @@ fastify.get('/test-db-connection', async (request, reply) => {
     }
 });
 fastify.register(client_routes_1.clientRoutes);
-fastify.register(asset_routes_1.assetRoutes);
+fastify.register(assets_routes_1.assetRoutes);
 fastify.addHook('onClose', async (instance) => {
     await instance.prisma.$disconnect();
 });

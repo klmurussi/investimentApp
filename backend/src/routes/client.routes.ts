@@ -14,11 +14,6 @@ const createClientSchema = z.object({
   status: z.enum(['ACTIVE', 'INACTIVE']).default('ACTIVE'),
 });
 
-const createAssetBodySchema = z.object({
-  name: z.string().min(3, 'Nome do ativo deve ter no mínimo 3 caracteres.'),
-  value: z.number().positive('Quantidade deve ser um número positivo.'),
-});
-
 export async function clientRoutes(fastify: FastifyInstance) {
   // GET /clients
   fastify.get('/clients', async (request:FastifyRequest, reply:FastifyReply) => {
@@ -62,74 +57,22 @@ export async function clientRoutes(fastify: FastifyInstance) {
     }
   });
 
-  // POST /clients/:id/assets 
-  fastify.post('/clients/:id/assets', async (request: FastifyRequest, reply: FastifyReply) => {
+  // GET /clients/:id 
+  fastify.get('/clients/:id', async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      const { id: clientID } = request.params as { id: string };
-      const { name, value } = createAssetBodySchema.parse(request.body);
+      const { id } = request.params as { id: string };
 
-      const clientExists = await fastify.prisma.client.findUnique({
-        where: { id: clientID },
-        select: { id: true },
+      const client = await fastify.prisma.client.findUnique({
+        where: { id },
       });
 
-      if (!clientExists) {
-        return reply.status(404).send({ message: 'Cliente não encontrado para adicionar o ativo.' });
+      if (!client) {
+        return reply.status(404).send({ message: 'Cliente não encontrado.' });
       }
 
-      const newAsset = await fastify.prisma.asset.create({
-        data: { name, value, clientID,
-          include: {
-            client: {
-              select: { name: true },
-            },
-          } ,
-        }
-      });
-
-      return reply.status(201).send(newAsset);
-    } catch (error: any) {
-      if (error instanceof z.ZodError) {
-        return reply.status(400).send({ message: 'Erro de validação', errors: error.errors });
-      }
-      fastify.log.error(`Erro ao criar ativo para o cliente:`, error);
-      return reply.status(500).send({ message: 'Erro interno do servidor.' });
-    }
-  });
-
-  // GET /clients/:id/assets 
-  fastify.get('/clients/:id/assets', async (request: FastifyRequest, reply: FastifyReply) => {
-    try {
-      const { id: clientID } = request.params as { id: string };
-
-      const clientExists = await fastify.prisma.client.findUnique({
-        where: { id: clientID },
-        select: { id: true },
-      });
-      if (!clientExists) {
-        return reply.status(404).send({ message: 'Cliente não encontrado para listar os ativos.' });
-      }
-
-      const assets = await fastify.prisma.asset.findMany({
-        where: { clientID: clientID },
-        include: {
-          client: { 
-            select: { name: true },
-          },
-        },
-        orderBy: { name: 'asc' }, 
-      });
-
-      const simplifiedAssets = assets.map(alloc => ({
-        name: alloc.name,
-        value: alloc.value,
-        clientName: alloc.client ? alloc.client.name : 'Cliente Desconhecido',
-        id: alloc.id,
-      }));
-
-      return reply.send(simplifiedAssets);
-    } catch (error: any) {
-      fastify.log.error(`Erro ao listar ativos do cliente`, error);
+      return reply.send(client);
+    } catch (error: any) { 
+      fastify.log.error(`Erro ao obter cliente`, error); 
       return reply.status(500).send({ message: 'Erro interno do servidor.' });
     }
   });

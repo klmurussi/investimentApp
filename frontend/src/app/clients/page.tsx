@@ -1,18 +1,20 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import ClientsDashboard from '@/components/ClientsDashboard';
 import ManagementLayoutBase from '@/components/DefaultMain';
 
 export default function ClientsPage() {
   const [searchTerm, setSearchTerm] = useState('');
+  const router = useRouter();
 
   const handleSearchChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     setSearchTerm(event.target.value);
   };
 
   const handleNewClientClick = () => {
-    alert('Funcionalidade de "Cadastrar Novo Cliente" será implementada aqui!');
+    router.push('/clients/new');
   };
 
   return (

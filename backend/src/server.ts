@@ -1,6 +1,7 @@
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import { clientRoutes } from './routes/client.routes';
+import { assetRoutes } from './routes/assets.routes';
 import { PrismaClient } from '@prisma/client';
 
 export const prisma = new PrismaClient();
